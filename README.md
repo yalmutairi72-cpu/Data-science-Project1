@@ -56,11 +56,7 @@ and covers, in order:
 
 **Recommended — Google Colab, no local setup:**
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR-GITHUB-USERNAME/time-series-capstone-economic-indicator/blob/main/capstone_economic_indicator.ipynb)
-
-> Replace `YOUR-GITHUB-USERNAME/time-series-capstone-economic-indicator` above
-> (and inside the notebook's own badge cell) with this repository's real path
-> once it's pushed to GitHub, so the badge opens *this* repo's notebook.
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/yalmutairi72-cpu/Data-science-Project1/blob/main/capstone_economic_indicator.ipynb)
 
 Click the badge, then run the first code cell and every cell after it in order.
 The first cell installs every package it needs (`pandas`, `numpy`, `matplotlib`,
@@ -72,8 +68,8 @@ no API key, no account required, per the course's own `setup.qmd`.
 **Locally, if you'd rather not use Colab:**
 
 ```bash
-git clone https://github.com/YOUR-GITHUB-USERNAME/time-series-capstone-economic-indicator.git
-cd time-series-capstone-economic-indicator
+git clone https://github.com/yalmutairi72-cpu/Data-science-Project1.git
+cd Data-science-Project1
 pip install pandas numpy matplotlib statsmodels lightgbm scikit-learn jupyter
 jupyter notebook capstone_economic_indicator.ipynb
 ```
