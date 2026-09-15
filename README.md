@@ -36,21 +36,26 @@ and covers, in order:
 
 1. **Decomposition & diagnostics** — STL decomposition, ACF/PACF, the ADF
    stationarity test, and what differencing the series needs.
-2. **A classical model** — SARIMA, with the order chosen by an AIC grid search
-   and a stated rationale, plus a Ljung-Box residual diagnostic.
+2. **Two classical models** — SARIMA (order chosen by an AIC grid search, with
+   a stated rationale) *and* Holt-Winters exponential smoothing (ETS), each with
+   a Ljung-Box residual diagnostic.
 3. **An ML/GBM model** — LightGBM with lag/rolling/calendar features, forecasting
    recursively, with an explicit discussion of leakage risk in that recursion.
-4. **A 4-fold walk-forward backtest** — using the course's own
-   `common/backtest.py` harness (`expanding_window_splits` + `run_backtest`),
-   with the expanding-vs-rolling choice justified for this series.
+4. **A 4-fold walk-forward backtest, run under both window schemes** — using the
+   course's own `common/backtest.py` harness (`expanding_window_splits` *and*
+   `rolling_window_splits` + `run_backtest`), with the two compared directly and
+   the final choice justified for this series.
 5. **Accuracy metrics** — MAE, RMSE, and MASE (justified over WAPE/MAPE for this
    series' shape) via the course's `common/metrics.py`.
-6. **Probabilistic forecasts** — a split-conformal interval for LightGBM and
-   SARIMA's native interval, both scored with `coverage()` **and**
-   `interval_width()` together, not coverage alone.
+6. **Probabilistic forecasts, five ways** — a split-conformal interval and a
+   quantile-regression interval (scored with `pinball_loss()`) for LightGBM,
+   SARIMA's native interval, Prophet's native interval, and sktime's
+   `predict_interval` on a Theta forecaster — every one scored with
+   `coverage()` **and** `interval_width()` together, not coverage alone.
 7. **A written model-comparison and recommendation** — reasoning from history
-   length, interpretability, interval support, and compute budget, not accuracy
-   alone.
+   length, interpretability, interval support, and compute budget across **all
+   four** tool families this course covers (statsmodels, Prophet, sktime,
+   LightGBM), not accuracy alone.
 
 ## How to open and run it
 
@@ -60,8 +65,8 @@ and covers, in order:
 
 Click the badge, then run the first code cell and every cell after it in order.
 The first cell installs every package it needs (`pandas`, `numpy`, `matplotlib`,
-`statsmodels`, `lightgbm`, `scikit-learn`) and downloads the shared
-`common/metrics.py`, `common/backtest.py`, and the dataset from the course's
+`statsmodels`, `lightgbm`, `scikit-learn`, `prophet`, `sktime`) and downloads the
+shared `common/metrics.py`, `common/backtest.py`, and the dataset from the course's
 GitHub repository if they aren't already present locally — no manual install,
 no API key, no account required, per the course's own `setup.qmd`.
 
@@ -70,7 +75,7 @@ no API key, no account required, per the course's own `setup.qmd`.
 ```bash
 git clone https://github.com/yalmutairi72-cpu/Data-science-Project1.git
 cd Data-science-Project1
-pip install pandas numpy matplotlib statsmodels lightgbm scikit-learn jupyter
+pip install pandas numpy matplotlib statsmodels lightgbm scikit-learn prophet sktime jupyter
 jupyter notebook capstone_economic_indicator.ipynb
 ```
 
@@ -101,12 +106,15 @@ repository automatically.
 |---|---|---|---|---|
 | Seasonal-naive baseline | 11.19 | 12.65 | 1.35 | 7.20 |
 | **SARIMA(0,1,2)(0,0,1,12)** | **3.07** | **4.12** | **0.37** | **1.97** |
+| ETS (Holt-Winters) | 4.61 | 5.83 | 0.55 | 2.97 |
 | LightGBM (recursive) | 4.97 | 5.83 | 0.60 | 3.19 |
 
-Both real models comfortably beat the naive baseline; SARIMA wins across the
-full 4-fold backtest, not just a single lucky holdout window — see the
-notebook's Section 7 for the full reasoning behind recommending it for
-deployment on this series.
+All three real models comfortably beat the naive baseline; SARIMA wins across the
+full 4-fold backtest — under both expanding and rolling windows — not just a
+single lucky holdout window. Five interval/quantile mechanisms (conformal,
+SARIMA-native, Prophet-native, sktime, and LightGBM quantile regression) are
+each scored on coverage *and* width in Section 6 — see the notebook's Section 7
+for the full reasoning behind recommending SARIMA for deployment on this series.
 
 ## Attribution
 
