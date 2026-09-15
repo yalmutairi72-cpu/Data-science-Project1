@@ -32,19 +32,24 @@ extending it.
   difference, seasonal (lag-12) difference alone — to isolate what each kind
   of differencing does independently before combining them in Section 2.
 
-### 2. Classical model — SARIMA
-- Grid search over `(p, q) ∈ {0,1,2}²`, `(P, D, Q) ∈ {0,1}³`, fixed `s=12`
-  and `d=1` (justified by Section 1's ADF results), ranked by AIC.
-- **Overdifferencing guard:** models are flagged `boundary_param=True` if any
+### 2. Classical models — SARIMA and ETS
+- **SARIMA:** grid search over `(p, q) ∈ {0,1,2}²`, `(P, D, Q) ∈ {0,1}³`, fixed
+  `s=12` and `d=1` (justified by Section 1's ADF results), ranked by AIC.
+  **Overdifferencing guard:** models are flagged `boundary_param=True` if any
   fitted parameter's absolute value is within 0.02 of 1.0 — the standard
   symptom of a seasonal MA/AR term compensating for one seasonal difference
   too many. The final selection is restricted to `D=0` candidates and takes
   the lowest AIC among those, rather than the grid's global AIC minimum
   (which is a `D=1` model with a boundary parameter).
-- Residual diagnostic: `acorr_ljungbox` at lags 6, 12, and 24, on residuals
-  with the first `seasonal_period + 1` observations dropped (SARIMA residuals
-  are unreliable before the model has "seen" a full seasonal cycle plus the
-  non-seasonal order).
+- **ETS:** `statsmodels.tsa.holtwinters.ExponentialSmoothing` with
+  `trend="add"`, `seasonal="add"`, `seasonal_periods=12`,
+  `initialization_method="estimated"` — a second, mechanistically different
+  classical model (smoothed states rather than differencing) fit on the same
+  96-month training window, for a genuine classical-vs-classical comparison
+  point in Section 7.
+- Residual diagnostic for both: `acorr_ljungbox` at lags 6, 12, and 24 (SARIMA
+  residuals with the first `seasonal_period + 1` observations dropped, since
+  they're unreliable before the model has "seen" a full seasonal cycle).
 
 ### 3. ML/GBM model — LightGBM
 - Features (`make_feature_frame`): lags `{1,2,3,6,12}`, rolling mean/std over
@@ -64,18 +69,19 @@ extending it.
   sampling for reproducibility.
 
 ### 4. Backtesting
-- `expanding_window_splits(n=108, n_folds=4, horizon=6, min_train_size=72)` —
-  4 folds, each a 6-month test window, minimum 72-month (6-year) initial
-  training window. `72 + 4×6 = 96 ≤ 108`, so this fits with 12 months to
-  spare (which is why the same 4-fold split works whether or not the final
-  12-month holdout is separately reserved elsewhere in the notebook — the
-  last fold's test window IS those final 6 of those 12 months by
-  construction).
+- `expanding_window_splits(n=108, n_folds=4, horizon=6, min_train_size=72)`
+  **and** `rolling_window_splits(n=108, n_folds=4, horizon=6, train_size=72)`
+  — 4 folds each, both compared directly rather than choosing one on theory
+  alone. `72 + 4×6 = 96 ≤ 108`, so both fit with 12 months to spare.
 - `run_backtest` refits every model from scratch inside each fold — no
-  model object or fitted state crosses a fold boundary.
-- Three model families run through the identical harness:
-  `seasonal_naive_forecast` (period=12, the mandatory baseline every model
-  must beat), the chosen SARIMA order, and `fit_predict_lgbm`.
+  model object or fitted state crosses a fold boundary, under either scheme.
+- Four model families run through the identical harness, under both window
+  schemes: `seasonal_naive_forecast` (period=12, the mandatory baseline every
+  model must beat), the chosen SARIMA order, the ETS model, and
+  `fit_predict_lgbm`.
+- **Final choice:** expanding, since the two schemes tie on accuracy for this
+  series (no structural break, unlike `workforce_demand.csv`) and expanding
+  uses strictly more of the available history.
 
 ### 5. Metrics
 - `mae`, `rmse`, `mase` (`seasonal_period=12`), `wape` — all from the course's
@@ -87,7 +93,7 @@ extending it.
   reported alongside it for completeness, not because zeros force it (this
   series has none).
 
-### 6. Probabilistic forecasting
+### 6. Probabilistic forecasting — five mechanisms
 - **LightGBM — split conformal, leave-one-fold-out:** for backtest fold *i*,
   the calibration set is the absolute residuals from the *other three* folds
   (18 residuals per calibration set); the interval half-width is the 80th
@@ -96,21 +102,36 @@ extending it.
   fold's own test error informs its own interval.
 - **SARIMA — native interval:** `get_forecast(12).conf_int(alpha=0.20)` on
   the model fit through month 96, evaluated against the true final 12 months.
-- Both are scored with `coverage()` and `interval_width()` together, per
-  `common/metrics.py`, and the notebook explicitly discusses the small-sample
-  calibration limitation this produces (LightGBM undercovers; SARIMA
-  overcovers with a wide interval) rather than reporting the numbers without
-  comment.
+- **Prophet — native interval:** `Prophet(interval_width=0.80, ...)` fit on
+  the same 96-month training window; `yhat_lower`/`yhat_upper` from
+  `predict()` evaluated the same way.
+- **sktime — `predict_interval`:** a `ThetaForecaster(sp=12)` (a third,
+  distinct classical mechanism) fit via sktime's API, with
+  `predict_interval(fh, coverage=0.80)` called directly.
+- **LightGBM — quantile regression, scored with `pinball_loss`:** two
+  separate `LGBMRegressor(objective="quantile", alpha=...)` models (at
+  `alpha=0.10` and `alpha=0.90`) trained on the same lag/rolling/calendar
+  features as the point-forecast model, walked along the *same* recursive
+  feature path as that point forecast (so both quantile models see identical
+  future feature values), and scored with `pinball_loss()` — the loss each
+  is actually trained to minimise — rather than MAE/RMSE.
+- All five are scored with `coverage()` and `interval_width()` together
+  (pinball loss additionally for the quantile model), per
+  `common/metrics.py`, and the notebook explicitly discusses the shared
+  small-sample calibration limitation this produces across all five
+  (over-, near-, and under-coverage all appear) rather than reporting the
+  numbers without comment.
 
 ## Reproducing this notebook exactly
 
 ```bash
-pip install pandas numpy matplotlib statsmodels lightgbm scikit-learn jupyter nbformat nbclient
+pip install pandas numpy matplotlib statsmodels lightgbm scikit-learn prophet sktime jupyter nbformat nbclient
 jupyter nbconvert --to notebook --execute --inplace capstone_economic_indicator.ipynb
 ```
 
-`RNG_SEED = 20260915` is the only source of randomness in the notebook
-(LightGBM's internal sampling); statsmodels' SARIMA fitting is deterministic
-given fixed data and orders. Re-running should reproduce every printed number
-exactly and every plot pixel-for-pixel modulo library version differences in
-font rendering.
+`RNG_SEED = 20260915` seeds the sources of randomness in the notebook
+(LightGBM's internal sampling, Prophet's internal sampler); statsmodels' and
+sktime's fits are deterministic given fixed data and orders. Re-running should
+reproduce every printed number exactly (Prophet's sampler may vary by a small
+amount between library versions) and every plot pixel-for-pixel modulo library
+version differences in font rendering.
